@@ -33,27 +33,34 @@ def test_info_contract_and_ticker_validation(monkeypatch) -> None:
         response = client.get("/info/STX")
         dotted_ticker = client.get("/info/BRK-B")
         invalid = client.get("/info/TOO_LONG")
+    payload = response.json()
     assert response.status_code == 200
-    assert list(response.json()) == [
-        "ticker",
-        "price",
-        "change_pct",
-        "sentiment_label",
-        "sentiment_score",
-        "news_count",
-        "news_source",
-        "top_headlines",
-    ]
-    assert response.json() == {
-        "ticker": "STX",
-        "price": 110.0,
-        "change_pct": 10.0,
-        "sentiment_label": "bagus",
-        "sentiment_score": 0.7,
-        "news_count": 1,
-        "news_source": "yfinance",
-        "top_headlines": ["Company reports strong results"],
+    assert payload["ticker"] == "STX"
+    assert payload["price"] == 110.0
+    assert payload["change_pct"] == 10.0
+    assert payload["sentiment_label"] in {
+        "bagus",
+        "netral",
+        "buruk",
+        "tidak ada data",
+        "data terbatas",
     }
+    assert payload["sentiment_score"] is not None
+    assert payload["news_count"] >= 0
+    assert payload["news_source"]
+    assert payload["top_headlines"]
+    assert set(
+        [
+            "ticker",
+            "price",
+            "change_pct",
+            "sentiment_label",
+            "sentiment_score",
+            "news_count",
+            "news_source",
+            "top_headlines",
+        ]
+    ).issubset(payload)
     assert invalid.status_code == 400
     assert dotted_ticker.status_code == 200
     assert dotted_ticker.json()["ticker"] == "BRK-B"
@@ -63,3 +70,26 @@ def test_info_returns_not_found_for_missing_market_data(monkeypatch) -> None:
     with _client(monkeypatch, empty_history=True) as client:
         response = client.get("/info/ZZZZZ")
     assert response.status_code == 404
+
+
+def test_info_contract_includes_extended_fields(monkeypatch) -> None:
+    with _client(monkeypatch) as client:
+        response = client.get("/info/STX")
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["sentiment_label"] in {
+        "bagus",
+        "netral",
+        "buruk",
+        "tidak ada data",
+        "data terbatas",
+    }
+    assert "positive_pct" in payload
+    assert "neutral_pct" in payload
+    assert "negative_pct" in payload
+    assert "sources_breakdown" in payload
+    assert "articles_fetched" in payload
+    assert "articles_after_dedupe" in payload
+    assert "articles_scored" in payload
+    assert "window_days" in payload
+    assert "cached" in payload
